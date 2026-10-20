@@ -23,6 +23,7 @@ After editing the code, click the reload icon on the extension card and refresh 
 
 Other controls:
 
+- **H** shows or hides the markers, **C** copies the markdown, **P** pauses or resumes CSS and Web Animations so you can annotate a specific frame (JS-driven animation, canvas and video are not affected). These shortcuts are off while a note is open.
 - **↑ / ↓** (element mode): step to the parent or child of the highlighted element. Also works inside an open note while it is still empty.
 - **Drag** the grab bar at the top of a note to move it.
 - **Cmd/Ctrl+Enter** saves a note; **Esc** cancels a drag, a pending selection or an open note, then closes the tool.

@@ -66,6 +66,9 @@
       .bar{cursor:default}.pop{cursor:default}.pop textarea{cursor:text}
       .bar .mode.on{background:#3f3f46;color:#fff}
       .bar kbd{font:10px/1 ui-monospace,Menlo,monospace;color:#a1a1aa;border:1px solid #52525b;border-radius:4px;padding:1px 4px;margin-left:4px}
+      .bar .primary kbd{color:#e0e7ff;border-color:#818cf8}
+      .bar .pause.on{background:#b45309;color:#fff}
+      .bar .pause.on kbd{color:#fde68a;border-color:#fbbf24}
       .bar .sep{width:1px;height:18px;background:#3f3f46;margin:0 4px}
       .hint{position:fixed;right:16px;bottom:70px;background:#312e81;color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;display:none;pointer-events:none}
       .hint.on{display:block}
@@ -80,8 +83,9 @@
       <button data-m="area" class="mode" title="Area select (A)">Area<kbd>A</kbd></button>
       <span class="sep"></span>
       <span class="count">0 notes</span>
-      <button data-a="copy" class="primary">Copy</button>
-      <button data-a="vis" title="Show/hide markers">Markers</button>
+      <button data-a="copy" class="primary" title="Copy markdown (C)">Copy<kbd>C</kbd></button>
+      <button data-a="vis" title="Show/hide markers (H)">Markers<kbd>H</kbd></button>
+      <button data-a="pause" class="pause" title="Pause animations (P)">Pause<kbd>P</kbd></button>
       <button data-a="clear">Clear</button>
       <button data-a="close" title="Close (Esc)">✕</button>
     </div>
@@ -89,6 +93,9 @@
   const $ = (s) => root.querySelector(s);
   const hl = $('.hl'), boxEl = $('.box'), multiEl = $('.multi'), tagEl = $('.tag'), markersEl = $('.markers'), bar = $('.bar'), toastEl = $('.toast'), hintEl = $('.hint');
   let markersVisible = true;
+  let paused = false;
+  let pausedAnims = [];
+  const pauseStyle = document.createElement('style');
 
   // ---------- helpers ----------
   const inUI = (el) => el === host || host.contains(el);
@@ -355,6 +362,30 @@
     return lines.join('\n');
   }
 
+  function toggleMarkers() {
+    markersVisible = !markersVisible;
+    renderMarkers();
+    toast(markersVisible ? 'Markers shown' : 'Markers hidden');
+  }
+
+  // Freezes CSS animations/transitions and Web Animations so a moving state can be annotated.
+  // Third-party JS-driven animation (requestAnimationFrame loops, canvas, video) is not affected.
+  function togglePause(quiet) {
+    paused = !paused;
+    if (paused) {
+      pauseStyle.textContent = '*,*::before,*::after{animation-play-state:paused !important}';
+      document.head.appendChild(pauseStyle);
+      pausedAnims = document.getAnimations().filter((a) => a.playState === 'running' && !inUI(a.effect?.target));
+      pausedAnims.forEach((a) => a.pause());
+    } else {
+      pauseStyle.remove();
+      pausedAnims.forEach((a) => { try { a.play(); } catch (_) { /* animation was cancelled */ } });
+      pausedAnims = [];
+    }
+    bar.querySelector('.pause').classList.toggle('on', paused);
+    if (!quiet) toast(paused ? 'Animations paused' : 'Animations resumed');
+  }
+
   async function copy() {
     if (!annotations.length) return toast('No notes yet');
     const text = toMarkdown();
@@ -582,7 +613,10 @@
     if (popover || e.metaKey || e.ctrlKey || e.altKey) return; // popover has a textarea: never hijack typing
     const t = e.target;
     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-    const m = Object.keys(MODES).find((k) => MODES[k].key === e.key.toLowerCase());
+    const k = e.key.toLowerCase();
+    const action = { h: toggleMarkers, c: copy, p: togglePause }[k];
+    if (action) { e.preventDefault(); e.stopPropagation(); action(); return; }
+    const m = Object.keys(MODES).find((k2) => MODES[k2].key === k);
     if (m) { e.preventDefault(); e.stopPropagation(); setMode(m); }
   }
 
@@ -631,6 +665,7 @@
     document.removeEventListener('keyup', onKeyUp, true);
     removeEventListener('blur', onBlur);
     cursorStyle.remove();
+    if (paused) togglePause(true);
     shiftDown = false; pending.clear(); updateHint();
     ['dragstart', 'submit'].forEach((n) => document.removeEventListener(n, swallow, true));
     document.removeEventListener('pointerdown', stopOnly, true);
@@ -646,7 +681,8 @@
     const a = btn?.dataset.a;
     if (a === 'copy') copy();
     if (a === 'close') deactivate();
-    if (a === 'vis') { markersVisible = !markersVisible; renderMarkers(); }
+    if (a === 'vis') toggleMarkers();
+    if (a === 'pause') togglePause();
     if (a === 'clear' && annotations.length && confirm(`Delete all ${annotations.length} notes on this page?`)) {
       annotations = []; store.save(); renderMarkers();
     }
