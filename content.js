@@ -34,7 +34,11 @@
       .hl{position:fixed;border:2px solid #6366f1;background:rgba(99,102,241,.12);border-radius:3px;display:none;pointer-events:none}
       .box{position:fixed;border:1.5px dashed #6366f1;background:rgba(99,102,241,.08);display:none;pointer-events:none;border-radius:2px}
       .multi div{position:fixed;border:1.5px solid #6366f1;background:rgba(99,102,241,.14);border-radius:3px;pointer-events:none}
-      .tag{position:fixed;background:#312e81;color:#fff;font:11px/1 ui-monospace,Menlo,monospace;padding:3px 6px;border-radius:4px;display:none;pointer-events:none;max-width:60vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .tag{position:fixed;background:#312e81;color:#fff;font:11px/1.35 ui-monospace,Menlo,monospace;padding:4px 7px;border-radius:5px;display:none;pointer-events:none;max-width:70vw}
+      .tag .t1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .tag .t2{display:flex;flex-wrap:wrap;gap:2px 10px;margin-top:3px;color:#c7d2fe}
+      .tag .t2 span{white-space:nowrap}
+      .tag .sw{display:inline-block;width:9px;height:9px;border-radius:2px;border:1px solid rgba(255,255,255,.6);vertical-align:-1px;margin-right:4px}
       .bar{position:fixed;right:16px;bottom:16px;display:flex;align-items:center;gap:2px;background:#18181b;color:#fff;border-radius:999px;padding:5px;box-shadow:0 6px 24px rgba(0,0,0,.35);pointer-events:auto;font-size:13px}
       .bar button{all:unset;cursor:pointer;padding:7px 12px;border-radius:999px;font-size:13px;color:#e4e4e7}
       .bar button:hover{background:#3f3f46;color:#fff}
@@ -418,11 +422,43 @@
     return under || kids[0];
   }
 
+  // rgb()/rgba() computed value → #rrggbb (or #rrggbbaa); null when fully transparent.
+  function toHex(css) {
+    const m = css.match(/rgba?\(([^)]+)\)/);
+    if (!m) return css || null;
+    const p = m[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+    const a = p.length > 3 ? p[3] : 1;
+    if (a === 0) return null;
+    const h = (n) => Math.round(n).toString(16).padStart(2, '0');
+    return '#' + h(p[0]) + h(p[1]) + h(p[2]) + (a < 1 ? h(a * 255) : '');
+  }
+
   function highlightEl(t) {
     const r = t.getBoundingClientRect();
     Object.assign(hl.style, { display: 'block', left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
-    tagEl.textContent = segment(t) + (readableName(t) ? ` — ${readableName(t)}` : '');
-    Object.assign(tagEl.style, { display: 'block', left: Math.max(4, r.left) + 'px', top: Math.max(4, r.top - 22) + 'px' });
+    const cs = getComputedStyle(t);
+    const fg = toHex(cs.color), bg = toHex(cs.backgroundColor);
+    const font = cs.fontFamily.split(',')[0].replace(/["']/g, '').trim();
+    const t1 = document.createElement('div');
+    t1.className = 't1';
+    t1.textContent = segment(t) + (readableName(t) ? ` — ${readableName(t)}` : '');
+    const t2 = document.createElement('div');
+    t2.className = 't2';
+    const chip = (text, color) => {
+      const el = document.createElement('span');
+      if (color) { const sw = document.createElement('i'); sw.className = 'sw'; sw.style.background = color; el.appendChild(sw); }
+      el.appendChild(document.createTextNode(text));
+      t2.appendChild(el);
+    };
+    chip(`H ${Math.round(r.height)} × W ${Math.round(r.width)}`);
+    if (fg) chip(fg, fg);
+    if (bg) chip(`bg ${bg}`, bg);
+    chip(`${font} ${Math.round(parseFloat(cs.fontSize) * 10) / 10}px`);
+    tagEl.replaceChildren(t1, t2);
+    tagEl.style.display = 'block';
+    const th = tagEl.offsetHeight;
+    tagEl.style.left = Math.max(4, Math.min(r.left, innerWidth - tagEl.offsetWidth - 4)) + 'px';
+    tagEl.style.top = (r.top - th - 6 >= 4 ? r.top - th - 6 : Math.min(r.bottom + 6, innerHeight - th - 4)) + 'px';
   }
 
   function updateHint() {
